@@ -222,24 +222,19 @@ def api_stop_simulation():
 def api_stream():
     def _generate():
         while True:
-            try:
-                stats   = fetch_stats()
-                recent  = fetch_recent_logs(5)
-                payload = json.dumps({
-                    "stats":     stats,
-                    "recent":    recent,
-                    "sim_stats": sim.simulation_stats,
-                })
-                yield f"data: {payload}\n\n"
-            except Exception as e:
-                yield f"data: {json.dumps({'error': str(e)})}\n\n"
-            time.sleep(2)
+            stats = fetch_stats()
+            recent = fetch_recent_logs(5)
 
-    return Response(
-        stream_with_context(_generate()),
-        mimetype="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
+            payload = json.dumps({
+                "stats": stats,
+                "recent": recent,
+                "sim_stats": sim.simulation_stats,
+            })
+
+            yield f"data: {payload}\n\n"
+            time.sleep(0.5)   # reduced delay
+
+    return Response(stream_with_context(_generate()), mimetype="text/event-stream")
 
 
 # -------------------------------------------------------------------
