@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Detection Logs — AI Anomaly Detection</title>
+  <meta name="description" content="Complete detection log table for the AI-Based Network Anomaly Detection System."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/style.css"/>
+  <style>
+    /* Search/filter bar */
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .filter-input {
+      flex: 1;
+      min-width: 200px;
+      padding: 9px 14px 9px 38px;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-size: 0.875rem;
+      font-family: 'Inter', sans-serif;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .filter-input:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(96,165,250,0.12);
+    }
+    .filter-input::placeholder { color: var(--text-muted); }
+    .filter-wrap { position: relative; flex: 1; min-width: 200px; }
+    .filter-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.95rem; }
+
+    .filter-select {
+      padding: 9px 14px;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-size: 0.875rem;
+      font-family: 'Inter', sans-serif;
+      outline: none;
+      cursor: pointer;
+    }
+    .filter-select:focus { border-color: var(--blue); }
+
+    /* Stats mini-row */
+    .log-stats {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .log-stat-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      background: var(--surface2);
+      border-radius: 20px;
+      border: 1px solid var(--border2);
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+    .log-stat-val { font-weight: 700; }
+    .log-stat-val.blue   { color: var(--blue);   }
+    .log-stat-val.red    { color: var(--red);     }
+    .log-stat-val.green  { color: var(--green);   }
+    .log-stat-val.muted  { color: var(--text-muted); }
+  </style>
+</head>
+<body>
+
+  <!-- ── Navbar ──────────────────────────────────────────────── -->
+  <nav class="navbar" role="navigation" aria-label="Main navigation">
+    <div class="navbar-inner">
+      <a href="/" class="brand" aria-label="Home">
+        <div class="brand-icon">🛡️</div>
+        <div>
+          <div class="brand-title">Anomaly Guard</div>
+          <div class="brand-sub">NSL-KDD · Random Forest · Real-Time</div>
+        </div>
+      </a>
+
+      <div class="nav-links">
+        <a href="/" class="nav-link" id="navDashboard">
+          <span class="nav-icon">📊</span>
+          <span class="nav-text">Dashboard</span>
+        </a>
+        <a href="/logs" class="nav-link active" id="navLogs">
+          <span class="nav-icon">📋</span>
+          <span class="nav-text">Logs</span>
+        </a>
+      </div>
+
+      <div class="nav-right">
+        <div class="user-badge">
+          <div class="user-avatar">{{ username[0].upper() if username else 'A' }}</div>
+          <span>{{ username or 'admin' }}</span>
+        </div>
+        <a href="/logout" class="btn btn-outline btn-sm">🚪 Logout</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Main ─────────────────────────────────────────────────── -->
+  <main class="container">
+
+    <!-- Page header -->
+    <div class="page-header">
+      <h2>📋 Detection Logs</h2>
+      <p>Complete audit trail of all classified network connections — sorted newest first</p>
+    </div>
+
+    <!-- Log stats pills -->
+    <div class="log-stats">
+      <div class="log-stat-item">
+        📁 Total Records: <span class="log-stat-val blue">{{ total }}</span>
+      </div>
+      <div class="log-stat-item">
+        🚨 Attacks: <span class="log-stat-val red">{{ logs | selectattr('prediction', 'equalto', 'Attack') | list | length }}</span>
+        (page)
+      </div>
+      <div class="log-stat-item">
+        ✅ Normal: <span class="log-stat-val green">{{ logs | selectattr('prediction', 'equalto', 'Normal') | list | length }}</span>
+        (page)
+      </div>
+      <div class="log-stat-item">
+        📄 Page <span class="log-stat-val muted">{{ page }} / {{ total_pages }}</span>
+      </div>
+    </div>
+
+    <!-- Main Panel -->
+    <div class="panel">
+      <h3 class="panel-title">
+        <span class="panel-title-icon">📋</span>
+        All Detection Records
+        <span class="total-badge">{{ total }} total</span>
+      </h3>
+
+      <!-- Filter bar -->
+      <div class="filter-bar">
+        <div class="filter-wrap">
+          <span class="filter-icon">🔍</span>
+          <input
+            type="text"
+            id="searchInput"
+            class="filter-input"
+            placeholder="Search by IP, prediction, or ID…"
+            oninput="filterTable()"
+          />
+        </div>
+        <select id="filterPred" class="filter-select" onchange="filterTable()">
+          <option value="">All Predictions</option>
+          <option value="Attack">⚠ Attack Only</option>
+          <option value="Normal">✔ Normal Only</option>
+        </select>
+        <button class="btn btn-outline btn-sm" onclick="clearFilters()">✖ Clear</button>
+      </div>
+
+      <!-- Table -->
+      <div class="table-wrapper">
+        <table class="data-table" id="logTable" aria-label="All detection records">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Timestamp</th>
+              <th>Source IP</th>
+              <th>Prediction</th>
+              <th>Confidence</th>
+            </tr>
+          </thead>
+          <tbody id="logTableBody">
+            {% for log in logs %}
+            <tr class="{{ 'row-attack' if log.prediction == 'Attack' else 'row-normal' }}"
+                data-pred="{{ log.prediction }}"
+                data-search="{{ log.id }} {{ log.timestamp }} {{ log.source_ip }} {{ log.prediction }}">
+              <td class="id-cell">#{{ log.id }}</td>
+              <td class="ts-cell">{{ log.timestamp }}</td>
+              <td class="ip-cell">{{ log.source_ip }}</td>
+              <td>
+                <span class="badge {{ 'badge-attack' if log.prediction == 'Attack' else 'badge-normal' }}">
+                  {{ '⚠' if log.prediction == 'Attack' else '✔' }} {{ log.prediction }}
+                </span>
+              </td>
+              <td>
+                {% set pct = (log.confidence_score * 100)|round(2) %}
+                <div class="conf-bar-wrap">
+                  <div class="conf-bar">
+                    <div class="conf-fill {{ 'attack' if log.prediction == 'Attack' else 'normal' }}"
+                         style="width:{{ pct }}%"></div>
+                  </div>
+                  <span class="conf-text">{{ "%.2f"|format(pct) }}%</span>
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5">
+                <div class="empty-state">
+                  <div class="empty-state-icon">📭</div>
+                  <h3>No logs found</h3>
+                  <p>Start the simulation to generate detection records.</p>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      {% if total_pages > 1 %}
+      <div class="pagination">
+        {% if page > 1 %}
+        <a href="/logs?page=1" class="page-btn" aria-label="First page">«</a>
+        <a href="/logs?page={{ page - 1 }}" class="page-btn" aria-label="Previous page">‹</a>
+        {% endif %}
+
+        {% for p in range([1, page - 2]|max, [total_pages + 1, page + 3]|min) %}
+          {% if p == page %}
+          <span class="page-btn active">{{ p }}</span>
+          {% else %}
+          <a href="/logs?page={{ p }}" class="page-btn">{{ p }}</a>
+          {% endif %}
+        {% endfor %}
+
+        {% if page < total_pages %}
+        <a href="/logs?page={{ page + 1 }}" class="page-btn" aria-label="Next page">›</a>
+        <a href="/logs?page={{ total_pages }}" class="page-btn" aria-label="Last page">»</a>
+        {% endif %}
+
+        <span class="page-info">Page {{ page }} of {{ total_pages }}</span>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Back button -->
+    <div style="text-align:center; margin-top:8px; margin-bottom: 24px;">
+      <a href="/" class="btn btn-outline">← Back to Dashboard</a>
+    </div>
+  </main>
+
+  <!-- ── Footer ──────────────────────────────────────────────── -->
+  <footer class="footer">
+    AI-Based Network Anomaly Detection System &nbsp;|&nbsp; SQLite · detection_logs table
+  </footer>
+
+  <script>
+    function filterTable() {
+      const query  = document.getElementById('searchInput').value.toLowerCase();
+      const pred   = document.getElementById('filterPred').value;
+      const rows   = document.querySelectorAll('#logTableBody tr[data-search]');
+      let visible  = 0;
+      rows.forEach(row => {
+        const searchData = (row.dataset.search || '').toLowerCase();
+        const rowPred    = row.dataset.pred || '';
+        const matchText  = !query || searchData.includes(query);
+        const matchPred  = !pred  || rowPred === pred;
+        row.style.display = (matchText && matchPred) ? '' : 'none';
+        if (matchText && matchPred) visible++;
+      });
+    }
+
+    function clearFilters() {
+      document.getElementById('searchInput').value  = '';
+      document.getElementById('filterPred').value   = '';
+      filterTable();
+    }
+  </script>
+</body>
+</html>

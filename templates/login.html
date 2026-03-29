@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Login — AI Network Anomaly Detection</title>
+  <meta name="description" content="Secure login portal for the AI-Based Network Anomaly Detection System."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="/static/style.css"/>
+  <style>
+    /* Extra particle canvas */
+    #particles { position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: 0.4; }
+    .login-page { position: relative; z-index: 1; }
+
+    /* Toggle password button */
+    .pw-toggle {
+      position: absolute;
+      right: 13px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 0.95rem;
+      padding: 2px;
+      transition: color 0.2s;
+    }
+    .pw-toggle:hover { color: var(--text); }
+
+    /* Divider */
+    .or-divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 20px 0;
+      color: var(--text-muted);
+      font-size: 0.78rem;
+    }
+    .or-divider::before, .or-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border2);
+    }
+
+    /* Credential chips */
+    .cred-chips {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .cred-chip {
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .cred-chip:hover {
+      border-color: var(--blue);
+      color: var(--blue);
+      background: rgba(96,165,250,0.06);
+      transform: translateY(-1px);
+    }
+    .cred-chip code {
+      background: transparent;
+      color: inherit;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.78rem;
+    }
+
+    /* Loader on submit */
+    .btn-login .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .btn-login.loading .spinner { display: inline-block; }
+    .btn-login.loading .btn-text { display: none; }
+  </style>
+</head>
+<body class="login-page">
+  <canvas id="particles"></canvas>
+
+  <div class="login-page">
+    <div class="login-card">
+      <!-- Logo & Title -->
+      <div class="login-logo">
+        <div class="login-logo-icon">🛡️</div>
+        <h1 class="login-title">Anomaly Guard</h1>
+        <p class="login-subtitle">AI-Based Network Anomaly Detection System</p>
+      </div>
+
+      <!-- Error message -->
+      {% if error %}
+      <div class="login-error" id="loginError">
+        <span>⚠️</span>
+        <span>{{ error }}</span>
+      </div>
+      {% endif %}
+
+      <!-- Login form -->
+      <form method="POST" action="/login" id="loginForm" autocomplete="off">
+        <div class="form-group">
+          <label class="form-label" for="username">Username</label>
+          <div class="input-wrap">
+            <span class="input-icon-el">👤</span>
+            <input
+              type="text"
+              id="username"
+              name="username"
+              class="form-input input-icon"
+              placeholder="Enter your username"
+              required
+              autofocus
+              value="{{ request.form.get('username', '') }}"
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="password">Password</label>
+          <div class="input-wrap">
+            <span class="input-icon-el">🔒</span>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              class="form-input input-icon"
+              placeholder="Enter your password"
+              style="padding-right: 42px;"
+              required
+            />
+            <button type="button" class="pw-toggle" id="pwToggle" title="Show/hide password">👁️</button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-login" id="loginBtn">
+          <span class="spinner"></span>
+          <span class="btn-text">🚀 Sign In</span>
+        </button>
+      </form>
+
+      <!-- Demo credentials -->
+      <div class="or-divider">Demo Credentials</div>
+      <div class="cred-chips">
+        <div class="cred-chip" onclick="fillCreds('admin','admin123')">
+          <span>👤</span>
+          <code>admin</code> / <code>admin123</code>
+        </div>
+      </div>
+
+      <p class="login-hint" style="margin-top:20px;">
+        Secured with session-based authentication
+      </p>
+    </div>
+  </div>
+
+  <script>
+    /* ── Password toggle ─────────────────────────────────────── */
+    const pwInput  = document.getElementById('password');
+    const pwToggle = document.getElementById('pwToggle');
+    pwToggle.addEventListener('click', () => {
+      const shown = pwInput.type === 'text';
+      pwInput.type = shown ? 'password' : 'text';
+      pwToggle.textContent = shown ? '👁️' : '🙈';
+    });
+
+    /* ── Fill demo credentials ───────────────────────────────── */
+    function fillCreds(user, pass) {
+      document.getElementById('username').value = user;
+      document.getElementById('password').value = pass;
+      document.getElementById('username').focus();
+    }
+
+    /* ── Loading state on submit ─────────────────────────────── */
+    document.getElementById('loginForm').addEventListener('submit', () => {
+      const btn = document.getElementById('loginBtn');
+      btn.classList.add('loading');
+      btn.disabled = true;
+    });
+
+    /* ── Particle canvas ─────────────────────────────────────── */
+    (function () {
+      const canvas = document.getElementById('particles');
+      const ctx    = canvas.getContext('2d');
+      let W, H, particles = [];
+
+      function resize() {
+        W = canvas.width  = window.innerWidth;
+        H = canvas.height = window.innerHeight;
+      }
+      resize();
+      window.addEventListener('resize', resize);
+
+      const COLORS = ['#60a5fa', '#a78bfa', '#22d3ee', '#34d399'];
+      for (let i = 0; i < 60; i++) {
+        particles.push({
+          x: Math.random() * window.innerWidth,
+          y: Math.random() * window.innerHeight,
+          r: Math.random() * 1.8 + 0.4,
+          dx: (Math.random() - 0.5) * 0.4,
+          dy: (Math.random() - 0.5) * 0.4,
+          color: COLORS[Math.floor(Math.random() * COLORS.length)],
+          op: Math.random() * 0.5 + 0.1,
+        });
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, W, H);
+        particles.forEach(p => {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fillStyle = p.color + Math.floor(p.op * 255).toString(16).padStart(2,'0');
+          ctx.fill();
+          p.x += p.dx; p.y += p.dy;
+          if (p.x < 0) p.x = W;
+          if (p.x > W) p.x = 0;
+          if (p.y < 0) p.y = H;
+          if (p.y > H) p.y = 0;
+        });
+        requestAnimationFrame(draw);
+      }
+      draw();
+    })();
+  </script>
+</body>
+</html>

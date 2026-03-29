@@ -1,0 +1,5 @@
+venv/
+__pycache__/
+*.pyc
+anomaly_detection.db
+.env

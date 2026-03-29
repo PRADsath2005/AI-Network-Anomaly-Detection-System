@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Dashboard — AI Network Anomaly Detection</title>
+  <meta name="description" content="Real-time AI-powered network anomaly detection dashboard with ML-based traffic classification."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="/static/style.css"/>
+</head>
+<body>
+
+  <!-- ── Navbar ──────────────────────────────────────────────── -->
+  <nav class="navbar" role="navigation" aria-label="Main navigation">
+    <div class="navbar-inner">
+      <!-- Brand -->
+      <a href="/" class="brand" aria-label="Home">
+        <div class="brand-icon">🛡️</div>
+        <div>
+          <div class="brand-title">Anomaly Guard</div>
+          <div class="brand-sub">NSL-KDD · Random Forest · Real-Time</div>
+        </div>
+      </a>
+
+      <!-- Nav Links -->
+      <div class="nav-links">
+        <a href="/" class="nav-link active" id="navDashboard">
+          <span class="nav-icon">📊</span>
+          <span class="nav-text">Dashboard</span>
+        </a>
+        <a href="/logs" class="nav-link" id="navLogs">
+          <span class="nav-icon">📋</span>
+          <span class="nav-text">Logs</span>
+        </a>
+      </div>
+
+      <!-- Right: user + logout -->
+      <div class="nav-right">
+        <div class="user-badge">
+          <div class="user-avatar" id="avatarInitial">{{ username[0].upper() if username else 'A' }}</div>
+          <span id="usernameDisplay">{{ username or 'admin' }}</span>
+        </div>
+        <a href="/logout" class="btn btn-outline btn-sm" id="btnLogout">🚪 Logout</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Main content ─────────────────────────────────────────── -->
+  <main class="container">
+
+    <!-- Page header -->
+    <div class="page-header">
+      <h2>🔍 Live Dashboard</h2>
+      <p>Real-time network traffic monitoring and anomaly classification</p>
+    </div>
+
+    <!-- ── Simulation Control Bar ───────────────────────────── -->
+    <div class="sim-bar">
+      <div class="sim-label" style="font-size:0.85rem; font-weight:600; color:var(--text-dim); flex:1;">
+        <span class="status-dot {{ 'running' if sim_running else 'stopped' }}" id="simDot"></span>
+        Simulation Engine:
+        <span id="simStatusText" style="color: {{ 'var(--green)' if sim_running else 'var(--text-muted)' }}; font-weight:700;">
+          {{ 'RUNNING' if sim_running else 'STOPPED' }}
+        </span>
+      </div>
+      <button id="btnStart" class="btn btn-success" onclick="startSim()"
+        {% if sim_running %}style="display:none"{% endif %}>
+        ▶ Start Simulation
+      </button>
+      <button id="btnStop" class="btn btn-danger" onclick="stopSim()"
+        {% if not sim_running %}style="display:none"{% endif %}>
+        ⏹ Stop Simulation
+      </button>
+    </div>
+
+    <!-- ── Stat Cards ─────────────────────────────────────────── -->
+    <section class="cards-grid" aria-label="Statistics">
+      <div class="card card-blue">
+        <div class="card-icon-wrap">📦</div>
+        <div class="card-body">
+          <p class="card-label">Total Analyzed</p>
+          <p class="card-value" id="statTotal">{{ stats.get('total', 0) }}</p>
+          <p class="card-trend">Packets classified</p>
+        </div>
+      </div>
+      <div class="card card-red">
+        <div class="card-icon-wrap">🚨</div>
+        <div class="card-body">
+          <p class="card-label">Attacks Detected</p>
+          <p class="card-value" id="statAttacks">{{ stats.get('attacks', 0) }}</p>
+          <p class="card-trend">Anomalies flagged</p>
+        </div>
+      </div>
+      <div class="card card-green">
+        <div class="card-icon-wrap">✅</div>
+        <div class="card-body">
+          <p class="card-label">Normal Traffic</p>
+          <p class="card-value" id="statNormals">{{ stats.get('normals', 0) }}</p>
+          <p class="card-trend">Benign connections</p>
+        </div>
+      </div>
+      <div class="card card-purple">
+        <div class="card-icon-wrap">📈</div>
+        <div class="card-body">
+          <p class="card-label">Attack Rate</p>
+          <p class="card-value" id="statRate">{{ stats.get('attack_rate', 0) }}%</p>
+          <p class="card-trend">of total traffic</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Charts Row 1: Live Traffic + Pie ─────────────────── -->
+    <div class="charts-grid-2">
+      <!-- Real-time Line Chart -->
+      <div class="panel">
+        <h3 class="panel-title">
+          <span class="panel-title-icon">📡</span>
+          Live Traffic Monitor
+          <span class="live-badge">LIVE</span>
+        </h3>
+        <div class="chart-container">
+          <canvas id="trafficChart" aria-label="Live Traffic Monitor Chart"></canvas>
+        </div>
+      </div>
+
+      <!-- Attack vs Normal Pie Chart -->
+      <div class="panel">
+        <h3 class="panel-title">
+          <span class="panel-title-icon">🍕</span>
+          Traffic Distribution
+        </h3>
+        <div class="chart-container">
+          <canvas id="pieChart" aria-label="Traffic Distribution Pie Chart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Model Performance Bar Chart ──────────────────────── -->
+    <div class="panel">
+      <h3 class="panel-title">
+        <span class="panel-title-icon">🏆</span>
+        Model Performance Metrics
+        <span class="total-badge">Random Forest · NSL-KDD</span>
+      </h3>
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items:center;">
+        <div class="chart-container-sm">
+          <canvas id="barChart" aria-label="Model Performance Bar Chart"></canvas>
+        </div>
+        <div id="metricBars">
+          <!-- populated by JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Recent Detections Table ───────────────────────────── -->
+    <div class="panel">
+      <h3 class="panel-title">
+        <span class="panel-title-icon">🔍</span>
+        Recent Detections
+        <span class="live-badge">LIVE</span>
+      </h3>
+      <div class="table-wrapper">
+        <table class="data-table" id="recentTable" aria-label="Recent detection logs">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Timestamp</th>
+              <th>Source IP</th>
+              <th>Prediction</th>
+              <th>Confidence</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyRecent">
+            {% for log in recent_logs %}
+            <tr class="{{ 'row-attack' if log.prediction == 'Attack' else 'row-normal' }}">
+              <td class="id-cell">{{ log.id }}</td>
+              <td class="ts-cell">{{ log.timestamp }}</td>
+              <td class="ip-cell">{{ log.source_ip }}</td>
+              <td>
+                <span class="badge {{ 'badge-attack' if log.prediction == 'Attack' else 'badge-normal' }}">
+                  {{ '⚠' if log.prediction == 'Attack' else '✔' }} {{ log.prediction }}
+                </span>
+              </td>
+              <td>
+                {% set pct = (log.confidence_score * 100)|round(2) %}
+                <div class="conf-bar-wrap">
+                  <div class="conf-bar">
+                    <div class="conf-fill {{ 'attack' if log.prediction == 'Attack' else 'normal' }}"
+                         style="width:{{ pct }}%"></div>
+                  </div>
+                  <span class="conf-text">{{ "%.2f"|format(pct) }}%</span>
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="5">
+                <div class="empty-state">
+                  <div class="empty-state-icon">📭</div>
+                  <h3>No detections yet</h3>
+                  <p>Press <strong>Start Simulation</strong> to begin monitoring.</p>
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div style="text-align:center; margin-top:16px;">
+        <a href="/logs" class="btn btn-outline btn-sm">📋 View All Logs</a>
+      </div>
+    </div>
+
+    <!-- ── Model Visualizations ──────────────────────────────── -->
+    {% if charts %}
+    <div class="panel">
+      <h3 class="panel-title">
+        <span class="panel-title-icon">📊</span>
+        Trained Model Visualizations
+      </h3>
+      <div class="charts-row">
+        {% if charts.confusion_matrix %}
+        <div class="chart-box">
+          <p class="chart-label">Confusion Matrix</p>
+          <img src="{{ charts.confusion_matrix }}" alt="Confusion Matrix" class="viz-img"/>
+        </div>
+        {% endif %}
+        {% if charts.metrics %}
+        <div class="chart-box">
+          <p class="chart-label">Performance Metrics</p>
+          <img src="{{ charts.metrics }}" alt="Metrics Chart" class="viz-img"/>
+        </div>
+        {% endif %}
+        {% if charts.feature_importance %}
+        <div class="chart-box">
+          <p class="chart-label">Feature Importance</p>
+          <img src="{{ charts.feature_importance }}" alt="Feature Importance" class="viz-img"/>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% else %}
+    <div class="panel">
+      <h3 class="panel-title">
+        <span class="panel-title-icon">📊</span>
+        Trained Model Visualizations
+      </h3>
+      <div class="empty-state">
+        <div class="empty-state-icon">🧬</div>
+        <h3>Charts not generated yet</h3>
+        <p>Run <code class="empty-msg code">python model.py</code> to train the model and generate visualizations.</p>
+      </div>
+    </div>
+    {% endif %}
+
+  </main>
+
+  <!-- ── Footer ──────────────────────────────────────────────── -->
+  <footer class="footer">
+    AI-Based Network Anomaly Detection System &nbsp;|&nbsp; IEEE-Inspired &nbsp;|&nbsp;
+    NSL-KDD Dataset &nbsp;|&nbsp; Random Forest Classifier
+  </footer>
+
+  <!-- ── Toast ───────────────────────────────────────────────── -->
+  <div class="toast" id="toast">
+    <span id="toastIcon">✅</span>
+    <span id="toastMsg">Simulation started</span>
+  </div>
+
+  <script src="/static/dashboard.js"></script>
+</body>
+</html>
