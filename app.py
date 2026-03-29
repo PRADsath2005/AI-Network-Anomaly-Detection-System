@@ -220,24 +220,23 @@ def api_stop_simulation():
 @app.route("/api/stream")
 @login_required
 def api_stream():
-    return jsonify({"message": "stream disabled"})
 
+    def generate():
+        while True:
+            try:
+                data = {
+                    "stats": sim.simulation_stats
+                }
 
-# -------------------------------------------------------------------
-# Helpers
-# -------------------------------------------------------------------
-def _available_charts() -> dict:
-    chart_files = {
-        "confusion_matrix":   "confusion_matrix.png",
-        "metrics":            "metrics.png",
-        "feature_importance": "feature_importance.png",
-    }
-    static_dir = os.path.join(BASE_DIR, "static")
-    return {
-        key: f"/static/{fname}"
-        for key, fname in chart_files.items()
-        if os.path.exists(os.path.join(static_dir, fname))
-    }
+                yield f"data: {json.dumps(data)}\n\n"
+
+                time.sleep(2)
+
+            except Exception as e:
+                logger.error("Stream error: %s", e)
+                break
+
+    return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
 
 # -------------------------------------------------------------------
