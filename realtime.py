@@ -30,10 +30,10 @@ _sim_lock     = threading.Lock()    # guards thread lifecycle
 
 # Stats updated in real-time, readable by Flask /api/stats
 simulation_stats = {
-    "running":    False,
-    "processed":  0,
-    "attacks":    0,
-    "normals":    0,
+    "running": False,
+    "total": 0,
+    "attacks": 0,
+    "normal": 0,
 }
 
 
@@ -124,11 +124,11 @@ def _run_simulation(
                 trigger_alert(source_ip, float(conf))
 
             # Update in-memory stats
-            simulation_stats["processed"] += 1
+          simulation_stats["total"] += 1
             if pred == 1:
                 simulation_stats["attacks"] += 1
-            else:
-                simulation_stats["normals"] += 1
+         else:
+                simulation_stats["normal"] += 1
 
         chunk_count += 1
         logger.info(
@@ -160,10 +160,9 @@ def start_simulation(chunk_size: int = 50, delay_seconds: float = 1.5) -> bool:
             return False
         _stop_event.clear()
         simulation_stats["running"]   = True
-        simulation_stats["processed"] = 0
-        simulation_stats["attacks"]   = 0
-        simulation_stats["normals"]   = 0
-
+       simulation_stats["total"] = 0
+simulation_stats["attacks"] = 0
+simulation_stats["normal"] = 0
         _sim_thread = threading.Thread(
             target=_run_simulation,
             kwargs={"chunk_size": chunk_size, "delay_seconds": delay_seconds},
