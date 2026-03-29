@@ -111,17 +111,14 @@ def _run_simulation(
             continue
 
         # -- Store + alert each row ---------------------------------------
-        for pred, conf in zip(predictions, confidences):
-            label     = "Attack" if pred == 1 else "Normal"
-            source_ip = _random_ip()
+      for pred, conf in zip(predictions, confidences):
+    label = "Attack" if pred == 1 else "Normal"
 
-            try:
-                insert_log(source_ip, label, float(conf))
-            except Exception as e:
-                logger.error("[REALTIME] DB insert error: %s", e)
-
-            if pred == 1:
-                trigger_alert(source_ip, float(conf))
+    simulation_stats["total"] += 1
+    if pred == 1:
+        simulation_stats["attacks"] += 1
+    else:
+        simulation_stats["normal"] += 1
 
             # Update in-memory stats
           simulation_stats["total"] += 1
