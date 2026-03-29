@@ -366,45 +366,34 @@ function showToast(msg, type = 'success') {
 /* ════════════════════════════════════════════════════════════════
    SSE — Server-Sent Events
    ════════════════════════════════════════════════════════════════ */
-function connectSSE() {
-  const evtSrc = new EventSource('/api/stream');
+setInterval(async () => {
+  try {
+    const res = await fetch("/api/stats");
+    const data = await res.json();
 
-  evtSrc.onmessage = (e) => {
-    try {
-      const data   = JSON.parse(e.data);
-      if (data.error) { console.warn('[SSE] error:', data.error); return; }
+    if (!data.ok) return;
 
-      const stats  = data.stats    || {};
-      const recent = data.recent   || [];
-      const simSt  = data.sim_stats || {};
+    const stats = data.stats || {};
+    const recent = data.recent || [];
 
-      updateCards(stats);
-      updateTable(recent);
-      updateSimStatus(!!simSt.running);
+    updateCards(stats);
+    updateTable(recent);
+    updateSimStatus(data.sim_stats?.running);
 
-      const newN = stats.normals ?? 0;
-      const newA = stats.attacks ?? 0;
+    const newN = stats.normals ?? 0;
+    const newA = stats.attacks ?? 0;
 
-      // Push to line chart only when data changes
-      if (newN !== prevNormals || newA !== prevAttacks) {
-        pushLinePoint(newN, newA);
-        updatePieChart(newN, newA);
-        prevNormals = newN;
-        prevAttacks = newA;
-      }
-    } catch (err) {
-      console.error('[SSE] parse error:', err);
+    if (newN !== prevNormals || newA !== prevAttacks) {
+      pushLinePoint(newN, newA);
+      updatePieChart(newN, newA);
+      prevNormals = newN;
+      prevAttacks = newA;
     }
-  };
 
-  evtSrc.onerror = () => {
-    console.warn('[SSE] Connection lost. Retrying in 5 s…');
-    evtSrc.close();
-    setTimeout(connectSSE, 5000);
-  };
-}
-
-connectSSE();
+  } catch (err) {
+    console.log("Polling error:", err);
+  }
+}, 1000);
 
 
 /* ════════════════════════════════════════════════════════════════
