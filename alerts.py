@@ -80,13 +80,16 @@ def send_email_alert(source_ip, confidence):
         print("SENDER:", SENDER_EMAIL)
         print("RECEIVER:", RECIPIENT_EMAIL)
 
-       server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10)
-server.set_debuglevel(1)   # ✅ ADD THIS LINE
+      server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10)
+server.set_debuglevel(1)
 server.starttls()
 
-        print("Logging in...")
-        server.login(SENDER_EMAIL, SENDER_APP_PASSWORD)
-        print("Login success ✅")
+print("Logging in...")
+print("EMAIL ENABLED:", ALERT_EMAIL_ENABLED)
+print("APP PASSWORD LENGTH:", len(SENDER_APP_PASSWORD))
+
+server.login(SENDER_EMAIL, SENDER_APP_PASSWORD)
+print("Login success ✅")
 
         server.sendmail(SENDER_EMAIL, RECIPIENT_EMAIL, msg.as_string())
         server.quit()
