@@ -80,8 +80,9 @@ def send_email_alert(source_ip, confidence):
         print("SENDER:", SENDER_EMAIL)
         print("RECEIVER:", RECIPIENT_EMAIL)
 
-        server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
-        server.starttls()
+       server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
+server.set_debuglevel(1)   # ✅ ADD THIS LINE
+server.starttls()
 
         print("Logging in...")
         server.login(SENDER_EMAIL, SENDER_APP_PASSWORD)
