@@ -220,21 +220,7 @@ def api_stop_simulation():
 @app.route("/api/stream")
 @login_required
 def api_stream():
-    def _generate():
-        while True:
-            stats = fetch_stats()
-            recent = fetch_recent_logs(5)
-
-            payload = json.dumps({
-                "stats": stats,
-                "recent": recent,
-                "sim_stats": sim.simulation_stats,
-            })
-
-            yield f"data: {payload}\n\n"
-            time.sleep(0.5)   # reduced delay
-
-    return Response(stream_with_context(_generate()), mimetype="text/event-stream")
+    return jsonify({"message": "stream disabled"})
 
 
 # -------------------------------------------------------------------
