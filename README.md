@@ -88,6 +88,15 @@ python model.py
               precision    recall  f1-score
     Normal       0.99      0.99      0.99
     Attack       0.99      0.99      0.99
+ 📸 Output 
+login page
+<img width="1366" height="768" alt="image" src="https://github.com/user-attachments/assets/0d51f32a-5558-4f0c-9ec7-abed0ea89c2b" />
+dashboard page
+<img width="1366" height="768" alt="image" src="https://github.com/user-attachments/assets/63b99fe1-cdf9-46d9-acfd-6b2836c4eb42" />
+logs page
+<img width="1366" height="768" alt="image" src="https://github.com/user-attachments/assets/687cb7d8-b20b-4196-a380-775384f2c1df" />
+email alerts
+<img width="1366" height="768" alt="image" src="https://github.com/user-attachments/assets/226b90e5-ff35-4956-96f1-46b8610e49b0" />
 ```
 
 ---
