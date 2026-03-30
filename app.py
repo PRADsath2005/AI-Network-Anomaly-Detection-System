@@ -1,20 +1,3 @@
-"""
-app.py
-------
-Flask web dashboard for the AI-Based Network Anomaly Detection System.
-Routes:
-  GET/POST /login              → login page
-  GET      /logout             → logout (session clear)
-  GET      /                   → main dashboard        [login required]
-  GET      /logs               → paginated log table   [login required]
-  GET      /api/stats          → JSON stats + recent logs
-  GET      /api/stream         → Server-Sent Events (SSE)
-  POST     /api/start_simulation
-  POST     /api/stop_simulation
-  GET      /api/charts
-  GET      /api/model_metrics  → accuracy / precision / recall / F1
-"""
-
 import os
 import json
 import logging
@@ -30,218 +13,120 @@ from flask import (
 from database import init_db, fetch_recent_logs, fetch_all_logs, fetch_stats
 import realtime as sim
 
-# -------------------------------------------------------------------
-# App setup
-# -------------------------------------------------------------------
-BASE_DIR = os.path.dirname(__file__)
+# ---------------- APP SETUP ----------------
 app = Flask(__name__, static_folder="static", template_folder="templates")
-app.secret_key = os.environ.get("FLASK_SECRET", "anomaly-detection-secret-2025")
+app.secret_key = os.environ.get("FLASK_SECRET", "secret123")
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s",
-)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 init_db()
 
-# -------------------------------------------------------------------
-# Auth config  (override via env vars in production)
-# -------------------------------------------------------------------
+# ---------------- LOGIN CONFIG ----------------
 USERS = {
-    os.environ.get("ADMIN_USER", "admin"): os.environ.get("ADMIN_PASS", "admin123"),
+    os.environ.get("ADMIN_USER", "admin"): os.environ.get("ADMIN_PASS", "admin123")
 }
 
-
 def login_required(f):
-    """Decorator: redirect to /login when no active session."""
     @wraps(f)
-    def decorated(*args, **kwargs):
+    def wrapper(*args, **kwargs):
         if "username" not in session:
             return redirect(url_for("login"))
         return f(*args, **kwargs)
-    return decorated
+    return wrapper
 
-
-# -------------------------------------------------------------------
-# Auth routes
-# -------------------------------------------------------------------
+# ---------------- LOGIN ----------------
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if "username" in session:
         return redirect(url_for("index"))
+
     error = None
     if request.method == "POST":
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
+        username = request.form.get("username")
+        password = request.form.get("password")
+
         if username in USERS and USERS[username] == password:
             session["username"] = username
-            logger.info("[AUTH] Login: %s", username)
             return redirect(url_for("index"))
-        error = "Invalid username or password. Please try again."
-        logger.warning("[AUTH] Failed login attempt for: %s", username)
+        else:
+            error = "Invalid credentials"
+
     return render_template("login.html", error=error)
 
-
+# ---------------- LOGOUT ----------------
 @app.route("/logout")
 def logout():
-    username = session.pop("username", None)
-    logger.info("[AUTH] Logout: %s", username)
+    session.clear()
     return redirect(url_for("login"))
 
-
-# -------------------------------------------------------------------
-# Pages
-# -------------------------------------------------------------------
+# ---------------- DASHBOARD ----------------
 @app.route("/")
 @login_required
 def index():
-    """Main dashboard page."""
     try:
-        stats  = fetch_stats()
+        stats = fetch_stats()
         recent = fetch_recent_logs(20)
-        charts = _available_charts()
+
         return render_template(
             "index.html",
             stats=stats,
             recent_logs=recent,
-            charts=charts,
             sim_running=sim.is_running(),
-            username=session.get("username"),
+            username=session.get("username")
         )
     except Exception as e:
-        logger.error("[APP] index error: %s", e)
-        return render_template(
-            "index.html",
-            stats={}, recent_logs=[], charts={},
-            sim_running=False, username=session.get("username"),
-        )
+        logger.error("Index error: %s", e)
+        return render_template("index.html", stats={}, recent_logs=[])
 
-
+# ---------------- LOGS PAGE ----------------
 @app.route("/logs")
 @login_required
-def logs_page():
-    """Full detection-logs table page."""
-    try:
-        page     = int(request.args.get("page", 1))
-        per_page = 50
-        all_logs = fetch_all_logs()
-        total    = len(all_logs)
-        start    = (page - 1) * per_page
-        end      = start + per_page
-        paged    = all_logs[start:end]
-        total_pages = max(1, (total + per_page - 1) // per_page)
-        return render_template(
-            "logs.html",
-            logs=paged,
-            page=page,
-            total_pages=total_pages,
-            total=total,
-            username=session.get("username"),
-        )
-    except Exception as e:
-        logger.error("[APP] logs_page error: %s", e)
-        return render_template(
-            "logs.html",
-            logs=[], page=1, total_pages=1, total=0,
-            username=session.get("username"),
-        )
+def logs():
+    logs = fetch_all_logs()
+    return render_template("logs.html", logs=logs)
 
-
-# -------------------------------------------------------------------
-# JSON API
-# -------------------------------------------------------------------
+# ---------------- API ----------------
 @app.route("/api/stats")
 @login_required
 def api_stats():
-    try:
-        stats  = fetch_stats()
-        recent = fetch_recent_logs(20)
-        return jsonify({
-            "ok":        True,
-            "stats":     stats,
-            "recent":    recent,
-            "sim_stats": sim.simulation_stats,
-        })
-    except Exception as e:
-        logger.error("[APP] /api/stats error: %s", e)
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-@app.route("/api/charts")
-@login_required
-def api_charts():
-    return jsonify({"ok": True, "charts": _available_charts()})
-
-
-@app.route("/api/model_metrics")
-@login_required
-def api_model_metrics():
-    """Return Random Forest model performance metrics for the bar chart."""
     return jsonify({
-        "ok": True,
-        "metrics": {
-            "Accuracy":  99.3,
-            "Precision": 98.7,
-            "Recall":    98.4,
-            "F1 Score":  98.5,
-        }
+        "stats": fetch_stats(),
+        "sim": sim.simulation_stats
     })
-
 
 @app.route("/api/start_simulation", methods=["POST"])
 @login_required
-def api_start_simulation():
-    try:
-        data          = request.json or {}
-        chunk_size    = int(data.get("chunk_size", 50))
-        delay_seconds = float(data.get("delay_seconds", 1.5))
-        started = sim.start_simulation(chunk_size=chunk_size, delay_seconds=delay_seconds)
-        return jsonify({"ok": started, "message": "Started" if started else "Already running"})
-    except Exception as e:
-        logger.error("[APP] /api/start_simulation error: %s", e)
-        return jsonify({"ok": False, "error": str(e)}), 500
-
+def start_sim():
+    sim.start_simulation()
+    return jsonify({"ok": True})
 
 @app.route("/api/stop_simulation", methods=["POST"])
 @login_required
-def api_stop_simulation():
-    try:
-        stopped = sim.stop_simulation()
-        return jsonify({"ok": stopped, "message": "Stopped" if stopped else "Not running"})
-    except Exception as e:
-        logger.error("[APP] /api/stop_simulation error: %s", e)
-        return jsonify({"ok": False, "error": str(e)}), 500
+def stop_sim():
+    sim.stop_simulation()
+    return jsonify({"ok": True})
 
-
-# -------------------------------------------------------------------
-# SSE — live dashboard updates
-# -------------------------------------------------------------------
+# ---------------- LIVE STREAM ----------------
 @app.route("/api/stream")
 @login_required
-def api_stream():
+def stream():
 
     def generate():
         while True:
-            try:
-                data = {
-                    "stats": sim.simulation_stats
-                }
+            data = {
+                "stats": sim.simulation_stats
+            }
+            yield f"data: {json.dumps(data)}\n\n"
+            time.sleep(2)
 
-                yield f"data: {json.dumps(data)}\n\n"
+    return Response(stream_with_context(generate()), mimetype="text/event-stream")
 
-                time.sleep(2)
-
-            except Exception as e:
-                logger.error("Stream error: %s", e)
-                break
-
-    return Response(stream_with_context(generate()), mimetype='text/event-stream')
-
-
-# -------------------------------------------------------------------
-# Entry point
-# -------------------------------------------------------------------
+# ---------------- MAIN ----------------
 if __name__ == "__main__":
-    logger.info("[APP] Starting Flask server at http://127.0.0.1:5000")
-    app.run(debug=False, host="0.0.0.0", port=5000, threaded=True)
+    logger.info("Starting server...")
+
+    # 🔥 IMPORTANT: AUTO START SIMULATION
+    sim.start_simulation()
+
+    app.run(host="0.0.0.0", port=5000, debug=False)
