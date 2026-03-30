@@ -10,11 +10,8 @@ from flask import (
     session, redirect, url_for,
 )
 
-from database import init_db, fetch_recent_logs, fetch_all_logs, fetch_stats
+from database import init_db, fetch_recent_logs, fetch_all_logs
 import realtime as sim
-
-# 🔥 AUTO START SIMULATION (IMPORTANT)
-sim.start_simulation()
 
 # ---------------- APP SETUP ----------------
 app = Flask(__name__, static_folder="static", template_folder="templates")
@@ -69,12 +66,11 @@ def logout():
 @login_required
 def index():
     try:
-        stats = fetch_stats()
         recent = fetch_recent_logs(20)
 
         return render_template(
             "index.html",
-            stats=stats,
+            stats=sim.simulation_stats,   # 🔥 FIXED
             recent_logs=recent,
             sim_running=sim.is_running(),
             username=session.get("username")
@@ -95,7 +91,7 @@ def logs():
 @login_required
 def api_stats():
     return jsonify({
-        "stats": fetch_stats(),
+        "stats": sim.simulation_stats,   # 🔥 FIXED
         "sim": sim.simulation_stats
     })
 
