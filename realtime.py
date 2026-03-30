@@ -1,12 +1,3 @@
-"""
-realtime.py
------------
-Simulates real-time network traffic by streaming the test dataset in chunks.
-FIX 1: Model is loaded ONCE outside the loop (not reloaded per chunk).
-FIX 2: stop/start controlled via a threading.Event — thread terminates cleanly.
-FIX 3: Error handling around prediction, DB insert, and alert dispatch.
-"""
-
 import os
 import time
 import random
@@ -16,19 +7,16 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-BASE_DIR      = os.path.dirname(__file__)
-MODELS_DIR    = os.path.join(BASE_DIR, "models")
+BASE_DIR = os.path.dirname(__file__)
+MODELS_DIR = os.path.join(BASE_DIR, "models")
 RF_MODEL_PATH = os.path.join(MODELS_DIR, "rf_model.pkl")
-SCALER_PATH   = os.path.join(MODELS_DIR, "scaler.pkl")
+SCALER_PATH = os.path.join(MODELS_DIR, "scaler.pkl")
 
-# -------------------------------------------------------------------
-# Simulation state — shared across Flask + this module
-# -------------------------------------------------------------------
-_stop_event   = threading.Event()   # set() → stops the loop
-_sim_thread   = None                # reference to the running thread
-_sim_lock     = threading.Lock()    # guards thread lifecycle
+# ---------------- STATE ----------------
+_stop_event = threading.Event()
+_sim_thread = None
+_sim_lock = threading.Lock()
 
-# Stats updated in real-time, readable by Flask /api/stats
 simulation_stats = {
     "running": False,
     "total": 0,
@@ -36,170 +24,132 @@ simulation_stats = {
     "normal": 0,
 }
 
-
-# -------------------------------------------------------------------
-# IP generator
-# -------------------------------------------------------------------
-def _random_ip() -> str:
+# ---------------- IP ----------------
+def _random_ip():
     return ".".join(str(random.randint(1, 254)) for _ in range(4))
 
 
-# -------------------------------------------------------------------
-# Core simulation loop
-# -------------------------------------------------------------------
-def _run_simulation(
-    chunk_size: int = 50,
-    delay_seconds: float = 1.5,
-    max_chunks: int = None,   # None = unlimited
-):
-    """
-    Internal loop: streams test data, predicts, stores, alerts.
-    Runs until _stop_event is set or max_chunks reached.
-    Model loaded ONCE before the loop to avoid redundant I/O.
-    """
+# ---------------- SIMULATION ----------------
+def _run_simulation(chunk_size=50, delay_seconds=1.5):
     import joblib
-    from database import init_db, insert_log
+    from database import init_db
     from alerts import trigger_alert
 
-    # -- Init DB ----------------------------------------------------------
     init_db()
 
-    # -- Load model ONCE (FIX: not inside loop) ---------------------------
+    # Load model
     try:
         rf_model = joblib.load(RF_MODEL_PATH)
-        scaler   = joblib.load(SCALER_PATH)
-        logger.info("[REALTIME] Model loaded from %s", RF_MODEL_PATH)
+        scaler = joblib.load(SCALER_PATH)
+        logger.info("Model loaded")
     except Exception as e:
-        logger.error("[REALTIME] Cannot load model: %s. Run python model.py first.", e)
+        logger.error("Model load error: %s", e)
         simulation_stats["running"] = False
         return
 
-    # -- Load test data ---------------------------------------------------
+    # Load data
     try:
         from preprocess import load_and_preprocess
-        _, X_test, _, y_test, _, _, _ = load_and_preprocess()
+        _, X_test, _, _, _, _, _ = load_and_preprocess()
     except Exception as e:
-        logger.error("[REALTIME] Cannot load data: %s", e)
+        logger.error("Data load error: %s", e)
         simulation_stats["running"] = False
         return
 
-    n_rows      = len(X_test)
-    chunk_count = 0
-    idx         = 0
-
-    logger.info("[REALTIME] Starting simulation (chunk_size=%d, delay=%.1fs)",
-                chunk_size, delay_seconds)
+    n_rows = len(X_test)
+    idx = 0
 
     while not _stop_event.is_set():
-        if max_chunks is not None and chunk_count >= max_chunks:
-            logger.info("[REALTIME] Reached max_chunks=%d. Stopping.", max_chunks)
-            break
 
-        # Wrap around if we run out of test rows
+        # chunk
         end = min(idx + chunk_size, n_rows)
         chunk = X_test[idx:end]
-        idx   = end % n_rows if end >= n_rows else end
+        idx = end if end < n_rows else 0
 
-        # -- Predict ------------------------------------------------------
+        # prediction
         try:
-            probas      = rf_model.predict_proba(chunk)   # shape (n, 2)
-            predictions = np.argmax(probas, axis=1)       # 0=Normal, 1=Attack
+            probas = rf_model.predict_proba(chunk)
+            predictions = np.argmax(probas, axis=1)
             confidences = probas[np.arange(len(probas)), predictions]
         except Exception as e:
-            logger.error("[REALTIME] Prediction error: %s", e)
+            logger.error("Prediction error: %s", e)
             time.sleep(delay_seconds)
             continue
 
-        # -- Store + alert each row ---------------------------------------
-      for pred, conf in zip(predictions, confidences):
-    label = "Attack" if pred == 1 else "Normal"
+        # process each row
+        for pred, conf in zip(predictions, confidences):
+            simulation_stats["total"] += 1
 
-    simulation_stats["total"] += 1
-    if pred == 1:
-        simulation_stats["attacks"] += 1
-    else:
-        simulation_stats["normal"] += 1
-
-            # Update in-memory stats
-          simulation_stats["total"] += 1
             if pred == 1:
                 simulation_stats["attacks"] += 1
-         else:
+
+                # alert
+                try:
+                    trigger_alert(_random_ip(), conf)
+                except Exception as e:
+                    logger.error("Alert error: %s", e)
+            else:
                 simulation_stats["normal"] += 1
 
-        chunk_count += 1
-        logger.info(
-            "[REALTIME] Chunk %d processed | attacks=%d normals=%d",
-            chunk_count,
-            simulation_stats["attacks"],
-            simulation_stats["normals"],
-        )
-
-        # -- Wait or check stop -------------------------------------------
+        # wait
         _stop_event.wait(timeout=delay_seconds)
 
     simulation_stats["running"] = False
-    logger.info("[REALTIME] Simulation stopped.")
+    logger.info("Simulation stopped")
 
 
-# -------------------------------------------------------------------
-# Public API — used by Flask app.py
-# -------------------------------------------------------------------
-def start_simulation(chunk_size: int = 50, delay_seconds: float = 1.5) -> bool:
-    """
-    Start the simulation in a background daemon thread.
-    Returns False if already running.
-    """
+# ---------------- START ----------------
+def start_simulation(chunk_size=50, delay_seconds=1.5):
     global _sim_thread
+
     with _sim_lock:
         if simulation_stats["running"]:
-            logger.warning("[REALTIME] Already running.")
             return False
+
         _stop_event.clear()
-        simulation_stats["running"]   = True
-       simulation_stats["total"] = 0
-simulation_stats["attacks"] = 0
-simulation_stats["normal"] = 0
+
+        simulation_stats["running"] = True
+        simulation_stats["total"] = 0
+        simulation_stats["attacks"] = 0
+        simulation_stats["normal"] = 0
+
         _sim_thread = threading.Thread(
             target=_run_simulation,
             kwargs={"chunk_size": chunk_size, "delay_seconds": delay_seconds},
-            daemon=True,   # FIX: daemon=True so it doesn't prevent Flask from exiting
-            name="SimulationThread",
+            daemon=True
         )
+
         _sim_thread.start()
-        logger.info("[REALTIME] Simulation thread started.")
+        logger.info("Simulation started")
+
     return True
 
 
-def stop_simulation() -> bool:
-    """
-    Signal the simulation thread to stop gracefully.
-    Returns False if not running.
-    """
+# ---------------- STOP ----------------
+def stop_simulation():
     with _sim_lock:
         if not simulation_stats["running"]:
             return False
+
         _stop_event.set()
-    logger.info("[REALTIME] Stop signal sent.")
+        logger.info("Stop signal sent")
+
     return True
 
 
-def is_running() -> bool:
+# ---------------- STATUS ----------------
+def is_running():
     return simulation_stats.get("running", False)
 
 
-# -------------------------------------------------------------------
-# Standalone execution
-# -------------------------------------------------------------------
+# ---------------- MAIN ----------------
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-    )
-    start_simulation(chunk_size=30, delay_seconds=2.0)
+    logging.basicConfig(level=logging.INFO)
+
+    start_simulation()
+
     try:
         while is_running():
             time.sleep(1)
     except KeyboardInterrupt:
-        logger.info("Ctrl+C — stopping simulation...")
         stop_simulation()
