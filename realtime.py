@@ -12,13 +12,10 @@ simulation_stats = {
     "normals": 0,
 }
 
-
-# ---------------- RANDOM IP ----------------
 def _random_ip():
     return ".".join(str(random.randint(1, 254)) for _ in range(4))
 
 
-# ---------------- MAIN LOOP ----------------
 def _run():
     from alerts import trigger_alert
 
@@ -29,17 +26,18 @@ def _run():
 
         simulation_stats["processed"] += 1
 
-        ip = _random_ip()   # 🔥 ADD THIS
+        ip = _random_ip()
 
-        if random.random() > 0.7:
+        # 🔥 Increase probability for testing
+        if random.random() > 0.5:
             simulation_stats["attacks"] += 1
-            prediction = "Attack"   # 🔥 ADD THIS
+            prediction = "Attack"
             trigger_alert(ip, 0.95)
         else:
             simulation_stats["normals"] += 1
-            prediction = "Normal"   # 🔥 ADD THIS
+            prediction = "Normal"
 
-        # 🔥 SAVE TO DATABASE
+        # 🔥 SAVE LOG
         insert_log({
             "source_ip": ip,
             "prediction": prediction,
@@ -52,14 +50,9 @@ def _run():
     print("⛔ SIMULATION STOPPED")
 
 
-# ---------------- START ----------------
 def start_simulation():
-
     if simulation_stats["running"]:
-        print("⚠ Already running")
         return
-
-    print("▶ Starting simulation...")
 
     _stop_event.clear()
 
@@ -72,12 +65,9 @@ def start_simulation():
     t.start()
 
 
-# ---------------- STOP ----------------
 def stop_simulation():
-    print("⏹ Stopping simulation...")
     _stop_event.set()
 
 
-# ---------------- STATUS ----------------
 def is_running():
     return simulation_stats["running"]
