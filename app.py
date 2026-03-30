@@ -13,7 +13,7 @@ from flask import (
 from database import init_db, fetch_recent_logs, fetch_all_logs, fetch_stats
 import realtime as sim
 
-# 🔥 VERY IMPORTANT (Render fix)
+# 🔥 AUTO START SIMULATION (IMPORTANT)
 sim.start_simulation()
 
 # ---------------- APP SETUP ----------------
@@ -126,8 +126,7 @@ def stream():
 
     return Response(stream_with_context(generate()), mimetype="text/event-stream")
 
-# ---------------- MAIN ----------------
+# ---------------- RUN ----------------
 if __name__ == "__main__":
     logger.info("Starting server...")
-
     app.run(host="0.0.0.0", port=5000, debug=False)
