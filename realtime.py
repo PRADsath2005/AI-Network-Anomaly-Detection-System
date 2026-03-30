@@ -28,7 +28,6 @@ def _run():
 
         ip = _random_ip()
 
-        # 🔥 Increase probability for testing
         if random.random() > 0.5:
             simulation_stats["attacks"] += 1
             prediction = "Attack"
@@ -37,14 +36,13 @@ def _run():
             simulation_stats["normals"] += 1
             prediction = "Normal"
 
-        # 🔥 SAVE LOG
-       insert_log(ip, prediction, 0.95)
+        # ✅ SAME LEVEL INDENT (IMPORTANT)
+        insert_log(ip, prediction, 0.95)
 
         print("STATS:", simulation_stats)
 
     simulation_stats["running"] = False
     print("⛔ SIMULATION STOPPED")
-
 
 def start_simulation():
     if simulation_stats["running"]:
