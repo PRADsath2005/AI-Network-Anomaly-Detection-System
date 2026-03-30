@@ -13,6 +13,9 @@ from flask import (
 from database import init_db, fetch_recent_logs, fetch_all_logs, fetch_stats
 import realtime as sim
 
+# 🔥 VERY IMPORTANT (Render fix)
+sim.start_simulation()
+
 # ---------------- APP SETUP ----------------
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.secret_key = os.environ.get("FLASK_SECRET", "secret123")
@@ -27,6 +30,7 @@ USERS = {
     os.environ.get("ADMIN_USER", "admin"): os.environ.get("ADMIN_PASS", "admin123")
 }
 
+# ---------------- LOGIN REQUIRED ----------------
 def login_required(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
@@ -79,7 +83,7 @@ def index():
         logger.error("Index error: %s", e)
         return render_template("index.html", stats={}, recent_logs=[])
 
-# ---------------- LOGS PAGE ----------------
+# ---------------- LOGS ----------------
 @app.route("/logs")
 @login_required
 def logs():
@@ -125,8 +129,5 @@ def stream():
 # ---------------- MAIN ----------------
 if __name__ == "__main__":
     logger.info("Starting server...")
-
-    # 🔥 IMPORTANT: AUTO START SIMULATION
-    sim.start_simulation()
 
     app.run(host="0.0.0.0", port=5000, debug=False)
