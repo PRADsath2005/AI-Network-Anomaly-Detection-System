@@ -17,11 +17,12 @@ _stop_event = threading.Event()
 _sim_thread = None
 _sim_lock = threading.Lock()
 
+# 🔥 IMPORTANT FIXED KEYS
 simulation_stats = {
     "running": False,
-    "total": 0,
+    "processed": 0,
     "attacks": 0,
-    "normal": 0,
+    "normals": 0,
 }
 
 # ---------------- IP ----------------
@@ -34,6 +35,8 @@ def _run_simulation(chunk_size=50, delay_seconds=1.5):
     import joblib
     from database import init_db
     from alerts import trigger_alert
+
+    print("🔥 SIMULATION LOOP STARTED")
 
     init_db()
 
@@ -61,12 +64,14 @@ def _run_simulation(chunk_size=50, delay_seconds=1.5):
 
     while not _stop_event.is_set():
 
-        # chunk
         end = min(idx + chunk_size, n_rows)
         chunk = X_test[idx:end]
         idx = end if end < n_rows else 0
 
-        # prediction
+        # 🔥 prevent empty chunk
+        if len(chunk) == 0:
+            continue
+
         try:
             probas = rf_model.predict_proba(chunk)
             predictions = np.argmax(probas, axis=1)
@@ -76,22 +81,24 @@ def _run_simulation(chunk_size=50, delay_seconds=1.5):
             time.sleep(delay_seconds)
             continue
 
-        # process each row
         for pred, conf in zip(predictions, confidences):
-            simulation_stats["total"] += 1
+
+            simulation_stats["processed"] += 1
 
             if pred == 1:
                 simulation_stats["attacks"] += 1
 
-                # alert
+                # 🔥 EMAIL + ALERT
                 try:
-                    trigger_alert(_random_ip(), conf)
+                    trigger_alert(_random_ip(), float(conf))
                 except Exception as e:
                     logger.error("Alert error: %s", e)
-            else:
-                simulation_stats["normal"] += 1
 
-        # wait
+            else:
+                simulation_stats["normals"] += 1
+
+        print("📊 STATS UPDATE:", simulation_stats)
+
         _stop_event.wait(timeout=delay_seconds)
 
     simulation_stats["running"] = False
@@ -109,9 +116,9 @@ def start_simulation(chunk_size=50, delay_seconds=1.5):
         _stop_event.clear()
 
         simulation_stats["running"] = True
-        simulation_stats["total"] = 0
+        simulation_stats["processed"] = 0
         simulation_stats["attacks"] = 0
-        simulation_stats["normal"] = 0
+        simulation_stats["normals"] = 0
 
         _sim_thread = threading.Thread(
             target=_run_simulation,
