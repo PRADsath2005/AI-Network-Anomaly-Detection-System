@@ -38,11 +38,7 @@ def _run():
             prediction = "Normal"
 
         # 🔥 SAVE LOG
-        insert_log({
-            "source_ip": ip,
-            "prediction": prediction,
-            "confidence_score": 0.95
-        })
+       insert_log(ip, prediction, 0.95)
 
         print("STATS:", simulation_stats)
 
