@@ -1,20 +1,18 @@
 """
 alerts.py
 ---------
-Alert system — desktop toast + Telegram alert
+Alert system — desktop toast + Telegram alert (secure)
 """
 
 import os
 import logging
 import threading
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 import requests
 
 logger = logging.getLogger(__name__)
 
-# Try importing plyer at module level; fall back gracefully if unavailable
+# ---------------- DESKTOP (PLYER) ----------------
 try:
     from plyer import notification as _plyer_notification
     PLYER_AVAILABLE = True
@@ -27,9 +25,8 @@ except ImportError:
 # ---------------- TELEGRAM CONFIG ----------------
 TELEGRAM_ENABLED = True
 
-SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "")
-SENDER_APP_PASSWORD = os.environ.get("SENDER_APP_PASSWORD", "")
-RECIPIENT_EMAIL = os.environ.get("RECIPIENT_EMAIL", "")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
 
 # ---------------- DESKTOP ALERT ----------------
@@ -44,71 +41,48 @@ def send_desktop_alert(source_ip, confidence):
             message=f"IP: {source_ip}\nConfidence: {confidence*100:.1f}%",
             timeout=5
         )
-        print("Desktop alert sent")
+        print("Desktop alert sent ✅")
     except Exception as e:
         print("Desktop alert error:", e)
 
 
-# ---------------- EMAIL ALERT ----------------
-def send_email_alert(source_ip, confidence):
+# ---------------- TELEGRAM ALERT ----------------
+def send_telegram_alert(source_ip, confidence):
 
     if not TELEGRAM_ENABLED:
         print("Telegram disabled ❌")
-        return False
+        return
 
-    if not SENDER_APP_PASSWORD:
-        print("App password missing ❌")
-        return False
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("Telegram config missing ❌")
+        return
 
-    subject = f"🚨 Network Attack Detected: {source_ip}"
-    body = f"""
-    ALERT!
+    message = f"""
+🚨 NETWORK ATTACK DETECTED 🚨
 
-    IP: {source_ip}
-    Confidence: {confidence*100:.2f}%
-    Time: {datetime.now()}
-    """
-
-    msg = MIMEText(body)
-    msg["From"] = SENDER_EMAIL
-    msg["To"] = RECIPIENT_EMAIL
-    msg["Subject"] = subject
+🌐 IP: {source_ip}
+📊 Confidence: {confidence*100:.2f}%
+🕒 Time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+"""
 
     try:
-        print("EMAIL FUNCTION CALLED")
-        print("SENDER:", SENDER_EMAIL)
-        print("RECEIVER:", RECIPIENT_EMAIL)
+        url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
 
-        server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
-        server.starttls()
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "text": message
+        }
 
-        print("Logging in...")
-        server.login(SENDER_EMAIL, SENDER_APP_PASSWORD)
-        print("Login success ✅")
+        response = requests.post(url, data=payload)
 
-        server.sendmail(SENDER_EMAIL, RECIPIENT_EMAIL, msg.as_string())
-        server.quit()
-
-        print("Email sent successfully ✅")
-        return True
-
-    except smtplib.SMTPAuthenticationError as e:
-        code = e.smtp_code
-        if code == 534:
-            print(
-                "EMAIL AUTH ERROR (534): Gmail requires an App Password.\n"
-                "  1. Enable 2-Step Verification at https://myaccount.google.com/security\n"
-                "  2. Generate an App Password at https://myaccount.google.com/apppasswords\n"
-                "  3. Set SENDER_APP_PASSWORD to the generated 16-character password."
-            )
-        elif code == 535:
-            print("EMAIL AUTH ERROR (535): Incorrect App Password. Double-check the value.")
+        if response.status_code == 200:
+            print("✅ Telegram alert sent!")
         else:
-            print(f"EMAIL AUTH ERROR ({code}):", e)
-        return False
+            print("❌ Telegram error:", response.text)
+
     except Exception as e:
-        print("EMAIL ERROR:", e)
-        return False
+        print("❌ Telegram error:", e)
+
 
 # ---------------- TRIGGER ----------------
 def trigger_alert(source_ip, confidence):
@@ -117,6 +91,7 @@ def trigger_alert(source_ip, confidence):
         send_telegram_alert(source_ip, confidence)
 
     threading.Thread(target=run, daemon=True).start()
+
 
 # ---------------- TEST ----------------
 if __name__ == "__main__":
