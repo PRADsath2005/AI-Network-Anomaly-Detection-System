@@ -1,6 +1,7 @@
 import time
 import random
 import threading
+from database import insert_log
 
 _stop_event = threading.Event()
 
@@ -24,26 +25,31 @@ def _run():
     print("🔥 SIMULATION STARTED")
 
     while not _stop_event.is_set():
-
         time.sleep(2)
 
-        # update stats
         simulation_stats["processed"] += 1
+
+        ip = _random_ip()   # 🔥 ADD THIS
 
         if random.random() > 0.7:
             simulation_stats["attacks"] += 1
-
-            # 🔥 trigger alert
-            trigger_alert(_random_ip(), 0.95)
-
+            prediction = "Attack"   # 🔥 ADD THIS
+            trigger_alert(ip, 0.95)
         else:
             simulation_stats["normals"] += 1
+            prediction = "Normal"   # 🔥 ADD THIS
 
-        print("📊 STATS:", simulation_stats)
+        # 🔥 SAVE TO DATABASE
+        insert_log({
+            "source_ip": ip,
+            "prediction": prediction,
+            "confidence_score": 0.95
+        })
 
-    # when stopped
+        print("STATS:", simulation_stats)
+
     simulation_stats["running"] = False
-    print("🛑 SIMULATION STOPPED")
+    print("⛔ SIMULATION STOPPED")
 
 
 # ---------------- START ----------------
