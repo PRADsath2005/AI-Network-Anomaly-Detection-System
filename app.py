@@ -92,7 +92,7 @@ def logs():
 def api_stats():
     return jsonify({
         "stats": sim.simulation_stats,   # 🔥 FIXED
-        "sim": sim.simulation_stats
+        "sim": sim.simulation_stats,
          "recent": fetch_recent_logs(10)
     })
 
